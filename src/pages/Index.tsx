@@ -7,6 +7,7 @@ import { showSuccess } from "@/utils/toast";
 import { Button } from "@/components/ui/button";
 import type { Emotion } from "@/types/emotion";
 import { allEmotions } from "@/types/emotion";
+import { useEmotionDetection } from "@/hooks/useEmotionDetection";
 
 type FeedbackType = 'feed' | 'play' | 'talk' | 'sleep' | 'tap' | 'levelUp';
 
@@ -104,6 +105,23 @@ const Index = () => {
   const [isAutonomousMode, setIsAutonomousMode] = useState(false);
   const autonomousIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [eyeColor, setEyeColor] = useState<'default' | 'green' | 'blue' | 'red'>('default');
+  const {
+    videoRef: mirrorVideoRef,
+    permission: cameraPermission,
+    isCameraAvailable,
+    isLoadingModels,
+    isDetecting,
+    currentEmotion: detectedEmotion,
+    confidence: detectedConfidence,
+    error: detectionError,
+    requestAccess: requestEmotionDetection,
+    stop: stopEmotionDetection,
+    resetError: resetDetectionError,
+  } = useEmotionDetection();
+  const [isMirrorMode, setIsMirrorMode] = useState(false);
+  const [showMirrorPreview, setShowMirrorPreview] = useState(true);
+  const lastMirroredEmotionRef = useRef<Emotion | null>(null);
+  const noFaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(petState));
@@ -127,7 +145,7 @@ const Index = () => {
     return 'neutral';
   }, []);
 
-  const displayThought = (message: string, duration = 2000) => {
+  const displayThought = useCallback((message: string, duration = 2000) => {
     if (thoughtTimeoutRef.current) {
       clearTimeout(thoughtTimeoutRef.current);
     }
@@ -136,7 +154,7 @@ const Index = () => {
       setThoughtMessage(null);
       thoughtTimeoutRef.current = null;
     }, duration);
-  };
+  }, []);
 
   const displayActionFeedback = (type: FeedbackType) => {
     setActiveFeedback({ type, id: Date.now() });
@@ -172,6 +190,14 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
+    if (isMirrorMode) {
+      if (autonomousIntervalRef.current) {
+        clearInterval(autonomousIntervalRef.current);
+        autonomousIntervalRef.current = null;
+      }
+      return;
+    }
+
     if (isAutonomousMode) {
       autonomousIntervalRef.current = setInterval(() => {
         handleAutonomousEmotionChange();
@@ -187,11 +213,100 @@ const Index = () => {
         clearInterval(autonomousIntervalRef.current);
       }
     };
-  }, [isAutonomousMode, handleAutonomousEmotionChange]);
+  }, [isAutonomousMode, handleAutonomousEmotionChange, isMirrorMode]);
+
+  useEffect(() => {
+    if (isDetecting && cameraPermission === 'granted') {
+      setIsMirrorMode(true);
+      if (isAutonomousMode) {
+        setIsAutonomousMode(false);
+      }
+    }
+  }, [isDetecting, cameraPermission, isAutonomousMode]);
+
+  useEffect(() => {
+    if (cameraPermission === 'denied' || cameraPermission === 'unsupported') {
+      setIsMirrorMode(false);
+      stopEmotionDetection();
+    }
+  }, [cameraPermission, stopEmotionDetection]);
+
+  const handleMirrorModeToggle = useCallback(async () => {
+    if (isMirrorMode) {
+      setIsMirrorMode(false);
+      stopEmotionDetection();
+      lastMirroredEmotionRef.current = null;
+      if (noFaceTimeoutRef.current) {
+        clearTimeout(noFaceTimeoutRef.current);
+        noFaceTimeoutRef.current = null;
+      }
+      return;
+    }
+    resetDetectionError();
+    await requestEmotionDetection();
+  }, [isMirrorMode, stopEmotionDetection, resetDetectionError, requestEmotionDetection]);
+
+  useEffect(() => {
+    if (!isMirrorMode) {
+      if (noFaceTimeoutRef.current) {
+        clearTimeout(noFaceTimeoutRef.current);
+        noFaceTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (detectedEmotion) {
+      if (noFaceTimeoutRef.current) {
+        clearTimeout(noFaceTimeoutRef.current);
+        noFaceTimeoutRef.current = null;
+      }
+      if (detectedConfidence < 0.45) {
+        return;
+      }
+      const isNewEmotion = lastMirroredEmotionRef.current !== detectedEmotion;
+      lastMirroredEmotionRef.current = detectedEmotion;
+      setPetState(prevState => {
+        if (prevState.mood === detectedEmotion) {
+          return { ...prevState, lastInteractionTime: Date.now() };
+        }
+        return { ...prevState, mood: detectedEmotion, lastInteractionTime: Date.now() };
+      });
+      if (isNewEmotion) {
+        const reflectionThought = getMoodTextForThought(detectedEmotion) || '...';
+        displayThought(reflectionThought, 1800);
+      }
+      return;
+    }
+
+    if (!noFaceTimeoutRef.current) {
+      noFaceTimeoutRef.current = setTimeout(() => {
+        lastMirroredEmotionRef.current = null;
+        setPetState(prevState => {
+          if (prevState.mood === 'curious') {
+            return prevState;
+          }
+          return { ...prevState, mood: 'curious', lastInteractionTime: Date.now() };
+        });
+      }, 3500);
+    }
+  }, [isMirrorMode, detectedEmotion, detectedConfidence, displayThought]);
+
+  useEffect(() => {
+    const targetIndex = displayableEmotions.indexOf(petState.mood);
+    if (targetIndex !== -1 && targetIndex !== currentCycleIndex) {
+      setCurrentCycleIndex(targetIndex);
+    }
+  }, [petState.mood, currentCycleIndex]);
 
   const handlePetClick = useCallback(() => {
     setIsPetTapped(true);
     setTimeout(() => setIsPetTapped(false), 200); // Reset tap state after animation
+
+    if (isMirrorMode) {
+      displayThought("Я наблюдаю за тобой!");
+      resetInteractionTime();
+      return;
+    }
 
     if (isAutonomousMode) {
       // If in autonomous mode, clicking disables it and sets to neutral
@@ -242,6 +357,23 @@ const Index = () => {
     currentStatusText = getMoodText(emotionForEmoPet);
   }
 
+  if (isMirrorMode) {
+    emotionForEmoPet = petState.mood;
+    if (detectionError) {
+      currentStatusText = detectionError;
+    } else if (!isCameraAvailable) {
+      currentStatusText = "Камера недоступна.";
+    } else if (isLoadingModels) {
+      currentStatusText = "Загружаю модели эмоций...";
+    } else if (!detectedEmotion || detectedConfidence < 0.45) {
+      currentStatusText = "Ищу твоё выражение лица...";
+    } else {
+      currentStatusText = `Я как ты: ${getMoodText(petState.mood) || "..."}`;
+    }
+  } else if (!isAutonomousMode && cycleStates[currentCycleIndex] !== 'toggleAutonomous') {
+    emotionForEmoPet = petState.mood;
+    currentStatusText = getMoodText(petState.mood) || '...';
+  }
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4">
       <div className="flex flex-col items-center gap-6 w-full max-w-md relative">
@@ -276,3 +408,13 @@ const Index = () => {
 };
 
 export default Index;
+
+
+
+
+
+
+
+
+
+

@@ -241,7 +241,14 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
   }, [emotion]);
 
   useEffect(() => {
-    const events: Array<keyof WindowEventMap> = ['pointerdown', 'touchstart', 'keydown'];
+    const events: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'click',
+      'mousedown',
+      'touchstart',
+      'touchend',
+      'keydown',
+    ];
 
     const handleUnlock = () => {
       if (audioReadyRef.current) {
@@ -255,17 +262,26 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
           }
           audioReadyRef.current = true;
           setAudioReady(true);
-          events.forEach((event) => window.removeEventListener(event, handleUnlock));
+          events.forEach((event) => {
+            window.removeEventListener(event, handleUnlock);
+            document.removeEventListener(event, handleUnlock);
+          });
         })
         .catch((error) => {
           console.error('Failed to unlock audio context:', error);
         });
     };
 
-    events.forEach((event) => window.addEventListener(event, handleUnlock, { passive: true }));
+    events.forEach((event) => {
+      window.addEventListener(event, handleUnlock, { passive: true });
+      document.addEventListener(event, handleUnlock, { passive: true });
+    });
 
     return () => {
-      events.forEach((event) => window.removeEventListener(event, handleUnlock));
+      events.forEach((event) => {
+        window.removeEventListener(event, handleUnlock);
+        document.removeEventListener(event, handleUnlock);
+      });
     };
   }, []);
 
