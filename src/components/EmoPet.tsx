@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useAudioLevel } from '@/hooks/useAudioLevel';
 import type { Emotion } from '@/types/emotion';
@@ -28,6 +28,10 @@ interface EmotionConfig {
   pulseAmplitude?: number;
   jitterIntensity?: number;
   headTiltIntensity?: number;
+  mobileScale?: {
+    width?: number;
+    height?: number;
+  };
 }
 
 const emotionConfigs: Record<Emotion, EmotionConfig> = {
@@ -38,6 +42,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.015,
     jitterIntensity: 0.3,
     headTiltIntensity: 0.4,
+    mobileScale: { width: 1.08, height: 1.08 },
   },
   happy: {
     leftEye: { x: 48, y: 64, width: 70, height: 70, filter: 'url(#subtlePulseGlow)' },
@@ -46,6 +51,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.045,
     jitterIntensity: 0.6,
     headTiltIntensity: 0.8,
+    mobileScale: { width: 1.15, height: 1.35 },
   },
   sad: {
     leftEye: { x: 53, y: 80, width: 60, height: 45, filter: 'url(#subtlePulseGlow)' },
@@ -54,6 +60,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.007,
     jitterIntensity: 0.1,
     headTiltIntensity: 0.2,
+    mobileScale: { width: 0.92, height: 0.6 },
   },
   sleepy: {
     leftEye: { x: 50, y: 88, width: 65, height: 8, filter: 'url(#subtlePulseGlow)' },
@@ -62,6 +69,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.004,
     jitterIntensity: 0.05,
     headTiltIntensity: 0.1,
+    mobileScale: { width: 1, height: 0.45 },
   },
   angry: {
     leftEye: { x: 45, y: 72, width: 70, height: 25, filter: 'url(#glow)' },
@@ -70,6 +78,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.07,
     jitterIntensity: 1.5,
     headTiltIntensity: 1.5,
+    mobileScale: { width: 1.18, height: 0.58 },
   },
   curious: {
     leftEye: { x: 45, y: 60, width: 70, height: 75, filter: 'url(#glow)' },
@@ -78,6 +87,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.03,
     jitterIntensity: 0.8,
     headTiltIntensity: 0.9,
+    mobileScale: { width: 1.08, height: 1.2 },
   },
   bored: {
     leftEye: { x: 52, y: 77, width: 60, height: 50, filter: 'url(#neutralPulseGlow)' },
@@ -86,6 +96,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.008,
     jitterIntensity: 0.18,
     headTiltIntensity: 0.28,
+    mobileScale: { width: 0.95, height: 0.85 },
   },
   scared: {
     leftEye: { x: 40, y: 52, width: 85, height: 90, filter: 'url(#glow)' },
@@ -94,6 +105,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.1,
     jitterIntensity: 1.8,
     headTiltIntensity: 1.8,
+    mobileScale: { width: 1.2, height: 1.35 },
   },
   calm: {
     leftEye: { x: 48, y: 70, width: 68, height: 55, filter: 'url(#subtlePulseGlow)' },
@@ -102,6 +114,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.006,
     jitterIntensity: 0.08,
     headTiltIntensity: 0.18,
+    mobileScale: { width: 1.05, height: 1.05 },
   },
   love: {
     leftEye: { x: 45, y: 65, width: 75, height: 65, filter: 'url(#subtlePulseGlow)' },
@@ -110,6 +123,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.05,
     jitterIntensity: 0.5,
     headTiltIntensity: 0.7,
+    mobileScale: { width: 1.12, height: 1.25 },
   },
   excited: {
     leftEye: { x: 40, y: 50, width: 85, height: 95, filter: 'url(#glow)' },
@@ -118,6 +132,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.12,
     jitterIntensity: 1.3,
     headTiltIntensity: 1.3,
+    mobileScale: { width: 1.22, height: 1.35 },
   },
   confused: {
     leftEye: { x: 50, y: 60, width: 65, height: 65, filter: 'url(#neutralPulseGlow)' },
@@ -126,6 +141,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.02,
     jitterIntensity: 0.7,
     headTiltIntensity: 0.8,
+    mobileScale: { width: 1.05, height: 1.05 },
   },
   surprised: {
     leftEye: { x: 40, y: 47, width: 90, height: 100, filter: 'url(#glow)' },
@@ -134,6 +150,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.08,
     jitterIntensity: 1.0,
     headTiltIntensity: 1.0,
+    mobileScale: { width: 1.25, height: 1.4 },
   },
   annoyed: {
     leftEye: { x: 50, y: 75, width: 65, height: 32, filter: 'url(#neutralPulseGlow)' },
@@ -142,6 +159,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.025,
     jitterIntensity: 0.6,
     headTiltIntensity: 0.7,
+    mobileScale: { width: 1.08, height: 0.68 },
   },
   shy: {
     leftEye: { x: 55, y: 77, width: 50, height: 50, filter: 'url(#subtlePulseGlow)' },
@@ -150,6 +168,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.01,
     jitterIntensity: 0.2,
     headTiltIntensity: 0.3,
+    mobileScale: { width: 0.9, height: 0.9 },
   },
   proud: {
     leftEye: { x: 50, y: 62, width: 62, height: 60, filter: 'url(#subtlePulseGlow)' },
@@ -158,6 +177,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.028,
     jitterIntensity: 0.4,
     headTiltIntensity: 0.55,
+    mobileScale: { width: 1.08, height: 1.1 },
   },
   silly: {
     leftEye: { x: 45, y: 65, width: 70, height: 67, filter: 'url(#glow)' },
@@ -166,6 +186,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.035,
     jitterIntensity: 0.9,
     headTiltIntensity: 1.0,
+    mobileScale: { width: 1.2, height: 1.05 },
   },
   determined: {
     leftEye: { x: 45, y: 72, width: 70, height: 42, filter: 'url(#glow)' },
@@ -174,6 +195,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.022,
     jitterIntensity: 0.55,
     headTiltIntensity: 0.65,
+    mobileScale: { width: 1.08, height: 0.75 },
   },
   worried: {
     leftEye: { x: 48, y: 72, width: 65, height: 53, filter: 'url(#neutralPulseGlow)' },
@@ -182,6 +204,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.018,
     jitterIntensity: 0.45,
     headTiltIntensity: 0.55,
+    mobileScale: { width: 0.95, height: 0.82 },
   },
   playful: {
     leftEye: { x: 50, y: 75, width: 65, height: 22, filter: 'url(#subtlePulseGlow)' },
@@ -190,6 +213,7 @@ const emotionConfigs: Record<Emotion, EmotionConfig> = {
     pulseAmplitude: 0.035,
     jitterIntensity: 0.75,
     headTiltIntensity: 0.85,
+    mobileScale: { width: 1.18, height: 0.95 },
   },
 };
 
@@ -235,6 +259,35 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
     blue: 'hsl(217.2 91.2% 59.8%)', // Tailwind blue-500 equivalent
     red: 'hsl(0 84.2% 60.2%)', // Tailwind red-500 equivalent
   };
+  const emotionDefaultEyeColor: Partial<Record<Emotion, string>> = {
+    happy: 'hsl(150 80% 55%)',
+    sad: 'hsl(210 80% 60%)',
+    sleepy: 'hsl(260 50% 70%)',
+    angry: 'hsl(0 82% 58%)',
+    curious: 'hsl(195 75% 60%)',
+    bored: 'hsl(220 12% 55%)',
+    scared: 'hsl(12 85% 62%)',
+    calm: 'hsl(187 52% 60%)',
+    love: 'hsl(330 72% 62%)',
+    excited: 'hsl(35 90% 58%)',
+    confused: 'hsl(271 72% 65%)',
+    surprised: 'hsl(22 93% 63%)',
+    annoyed: 'hsl(48 100% 50%)',
+    shy: 'hsl(0 65% 70%)',
+    proud: 'hsl(280 66% 62%)',
+    silly: 'hsl(306 75% 65%)',
+    determined: 'hsl(353 90% 55%)',
+    worried: 'hsl(204 67% 58%)',
+    playful: 'hsl(92 71% 60%)',
+    neutral: 'hsl(210 10% 30%)',
+  };
+
+  const resolvedEyeColor = useMemo(() => {
+    if (eyeColor !== 'default') {
+      return eyeFillColorMap[eyeColor];
+    }
+    return emotionDefaultEyeColor[displayEmotion] ?? eyeFillColorMap.default;
+  }, [eyeColor, displayEmotion]);
 
   useEffect(() => {
     setDisplayEmotion(emotion);
@@ -467,6 +520,12 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
   let finalLeftEyeWidth = baseLeftEye.width * microScale * audioEyeScale * finalEmotionScale;
   let finalLeftEyeHeight = baseLeftEye.height * microScale * audioEyeScale * finalEmotionScale;
 
+  const mobileWidthScale = isMobile ? (config.mobileScale?.width ?? 1) : 1;
+  const mobileHeightScale = isMobile ? (config.mobileScale?.height ?? 1) : 1;
+
+  finalLeftEyeWidth *= mobileWidthScale;
+  finalLeftEyeHeight *= mobileHeightScale;
+
   // Apply horizontal gaze scaling and shifting
   if (horizontalGazeInfluence > 0) { // Looking right
       finalLeftEyeWidth *= (1 + horizontalGazeInfluence * gazeScaleStrength);
@@ -486,6 +545,9 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
   let finalRightEyeY = baseRightEye.y + jitterOffset.y;
   let finalRightEyeWidth = baseRightEye.width * microScale * audioEyeScale * finalEmotionScale;
   let finalRightEyeHeight = baseRightEye.height * microScale * audioEyeScale * finalEmotionScale;
+
+  finalRightEyeWidth *= mobileWidthScale;
+  finalRightEyeHeight *= mobileHeightScale;
 
   // Apply horizontal gaze scaling and shifting
   if (horizontalGazeInfluence > 0) { // Looking right
@@ -569,7 +631,7 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
               width={finalLeftEyeWidth}
               height={finalLeftEyeHeight}
               className={cn(eyeTransition)}
-              fill={eyeFillColorMap[eyeColor]}
+              fill={resolvedEyeColor}
               style={{ transform: `scaleY(${isBlinking ? 0.01 : 1})`, transformOrigin: 'center center' }}
             />
             <ellipse
@@ -591,7 +653,7 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
               width={finalRightEyeWidth}
               height={finalRightEyeHeight}
               className={cn(eyeTransition)}
-              fill={eyeFillColorMap[eyeColor]}
+              fill={resolvedEyeColor}
               style={{ transform: `scaleY(${isBlinking ? 0.01 : 1})`, transformOrigin: 'center center' }}
             />
             <ellipse
@@ -661,7 +723,7 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
               width={finalLeftEyeWidth}
               height={finalLeftEyeHeight}
               className={cn(eyeTransition)}
-              fill={eyeFillColorMap[eyeColor]}
+              fill={resolvedEyeColor}
               style={{ transform: `scaleY(${isBlinking ? 0.01 : 1})`, transformOrigin: 'center center' }}
             />
             <ellipse
@@ -683,7 +745,7 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
               width={finalRightEyeWidth}
               height={finalRightEyeHeight}
               className={cn(eyeTransition)}
-              fill={eyeFillColorMap[eyeColor]}
+              fill={resolvedEyeColor}
               style={{ transform: `scaleY(${isBlinking ? 0.01 : 1})`, transformOrigin: 'center center' }}
             />
             <ellipse
@@ -703,3 +765,5 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
 };
 
 export default EmoPet;
+
+
