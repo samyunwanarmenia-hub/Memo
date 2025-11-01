@@ -191,189 +191,37 @@ const Index = () => {
 
   useEffect(() => {
     if (isMirrorMode) {
-      if (autonomousIntervalRef.current) {
-        clearInterval(autonomousIntervalRef.current);
-        autonomousIntervalRef.current = null;
-      }
-      return;
-    }
-
-    if (isAutonomousMode) {
-      autonomousIntervalRef.current = setInterval(() => {
-        handleAutonomousEmotionChange();
-      }, 5000 + Math.random() * 5000);
-    } else {
-      if (autonomousIntervalRef.current) {
-        clearInterval(autonomousIntervalRef.current);
-        autonomousIntervalRef.current = null;
-      }
-    }
-    return () => {
-      if (autonomousIntervalRef.current) {
-        clearInterval(autonomousIntervalRef.current);
-      }
-    };
-  }, [isAutonomousMode, handleAutonomousEmotionChange, isMirrorMode]);
-
-  useEffect(() => {
-    if (isDetecting && cameraPermission === 'granted') {
-      setIsMirrorMode(true);
-      if (isAutonomousMode) {
-        setIsAutonomousMode(false);
-      }
-    }
-  }, [isDetecting, cameraPermission, isAutonomousMode]);
-
-  useEffect(() => {
-    if (cameraPermission === 'denied' || cameraPermission === 'unsupported') {
-      setIsMirrorMode(false);
-      stopEmotionDetection();
-    }
-  }, [cameraPermission, stopEmotionDetection]);
-
-  const handleMirrorModeToggle = useCallback(async () => {
-    if (isMirrorMode) {
-      setIsMirrorMode(false);
-      stopEmotionDetection();
-      lastMirroredEmotionRef.current = null;
-      if (noFaceTimeoutRef.current) {
-        clearTimeout(noFaceTimeoutRef.current);
-        noFaceTimeoutRef.current = null;
-      }
-      return;
-    }
-    resetDetectionError();
-    await requestEmotionDetection();
-  }, [isMirrorMode, stopEmotionDetection, resetDetectionError, requestEmotionDetection]);
-
-  useEffect(() => {
-    if (!isMirrorMode) {
-      if (noFaceTimeoutRef.current) {
-        clearTimeout(noFaceTimeoutRef.current);
-        noFaceTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (detectedEmotion) {
-      if (noFaceTimeoutRef.current) {
-        clearTimeout(noFaceTimeoutRef.current);
-        noFaceTimeoutRef.current = null;
-      }
-      if (detectedConfidence < 0.45) {
-        return;
-      }
-      const isNewEmotion = lastMirroredEmotionRef.current !== detectedEmotion;
-      lastMirroredEmotionRef.current = detectedEmotion;
-      setPetState(prevState => {
-        if (prevState.mood === detectedEmotion) {
-          return { ...prevState, lastInteractionTime: Date.now() };
-        }
-        return { ...prevState, mood: detectedEmotion, lastInteractionTime: Date.now() };
-      });
-      if (isNewEmotion) {
-        const reflectionThought = getMoodTextForThought(detectedEmotion) || '...';
-        displayThought(reflectionThought, 1800);
-      }
-      return;
-    }
-
-    if (!noFaceTimeoutRef.current) {
-      noFaceTimeoutRef.current = setTimeout(() => {
-        lastMirroredEmotionRef.current = null;
-        setPetState(prevState => {
-          if (prevState.mood === 'curious') {
-            return prevState;
-          }
-          return { ...prevState, mood: 'curious', lastInteractionTime: Date.now() };
-        });
-      }, 3500);
-    }
-  }, [isMirrorMode, detectedEmotion, detectedConfidence, displayThought]);
-
-  useEffect(() => {
-    const targetIndex = displayableEmotions.indexOf(petState.mood);
-    if (targetIndex !== -1 && targetIndex !== currentCycleIndex) {
-      setCurrentCycleIndex(targetIndex);
-    }
-  }, [petState.mood, currentCycleIndex]);
-
-  const handlePetClick = useCallback(() => {
-    setIsPetTapped(true);
-    setTimeout(() => setIsPetTapped(false), 200); // Reset tap state after animation
-
-    if (isMirrorMode) {
-      displayThought("� �������� �� �����!");
-      resetInteractionTime();
-      return;
-    }
-
-    if (isAutonomousMode) {
-      // If in autonomous mode, clicking disables it and sets to neutral
-      setIsAutonomousMode(false);
-      setCurrentCycleIndex(displayableEmotions.indexOf('neutral')); // Reset to neutral emotion index
-      setPetState(prevState => ({ ...prevState, mood: 'neutral', lastInteractionTime: Date.now() }));
-      displayThought('Авто-режим выключен.');
-    } else {
-      // If not in autonomous mode, cycle through states
-      setCurrentCycleIndex(prevIndex => {
-        const nextIndex = (prevIndex + 1) % cycleStates.length;
-        const nextState = cycleStates[nextIndex];
-
-        if (nextState === 'toggleAutonomous') {
-          setIsAutonomousMode(true);
-          displayThought('Авто-режим включен!');
-          // The useEffect for autonomous mode will pick this up and start the interval
-        } else {
-          setPetState(prevState => ({ ...prevState, mood: nextState, lastInteractionTime: Date.now() }));
-          displayThought(getMoodTextForThought(nextState) || '...');
-        }
-        return nextIndex;
-      });
-    }
-    resetInteractionTime();
-  }, [isAutonomousMode, resetInteractionTime, handleAutonomousEmotionChange]);
-
-
-  if (!isReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>Загрузка Telegram WebApp...</p>
-      </div>
-    );
-  }
-
-  let emotionForEmoPet: Emotion;
-  let currentStatusText: string;
-
-  if (isAutonomousMode) {
-    emotionForEmoPet = petState.mood;
-    currentStatusText = `Авто-режим: ${getMoodText(petState.mood)}`;
-  } else if (cycleStates[currentCycleIndex] === 'toggleAutonomous') {
-    emotionForEmoPet = 'curious'; // Or neutral, to indicate a special state
-    currentStatusText = 'Нажмите, чтобы включить авто-режим';
-  } else {
-    emotionForEmoPet = cycleStates[currentCycleIndex] as Emotion;
-    currentStatusText = getMoodText(emotionForEmoPet);
-  }
-
-  if (isMirrorMode) {
     emotionForEmoPet = petState.mood;
     if (detectionError) {
       currentStatusText = detectionError;
     } else if (!isCameraAvailable) {
-      currentStatusText = "������ ����������.";
+      currentStatusText = "Камера недоступна.";
     } else if (isLoadingModels) {
-      currentStatusText = "�������� ������ ������...";
+      currentStatusText = "Загружаю модели эмоций...";
     } else if (!detectedEmotion || detectedConfidence < 0.45) {
-      currentStatusText = "��� ��� ��������� ����...";
+      currentStatusText = "Ищу твоё выражение лица...";
     } else {
-      currentStatusText = `� ��� ��: ${getMoodText(petState.mood) || "..."}`;
+      currentStatusText = `Я как ты: ${getMoodText(petState.mood) || "..."}`;
     }
-  } else if (!isAutonomousMode && cycleStates[currentCycleIndex] !== 'toggleAutonomous') {
+  } else if (!isAutonomousMode && cycleStates[currentCycleIndex] !== "toggleAutonomous") {
     emotionForEmoPet = petState.mood;
-    currentStatusText = getMoodText(petState.mood) || '...';
+    currentStatusText = getMoodText(petState.mood) || "...";
   }
+
+  const mirrorStatusText = (() => {
+    if (isMirrorMode) {
+      if (detectionError) return detectionError;
+      if (!isCameraAvailable) return "Камера недоступна.";
+      if (isLoadingModels) return "Загружаю модели эмоций...";
+      if (!detectedEmotion || detectedConfidence < 0.45) return "Ищу твоё выражение лица...";
+      return `Улавливаю: ${getMoodText(petState.mood) || detectedEmotion} (${Math.round(detectedConfidence * 100)}%)`;
+    }
+    if (cameraPermission === "granted") {
+      return "Я готов повторять — нажми «Повторять меня».";
+    }
+    return "Разреши доступ к камере, чтобы я смог подражать тебе.";
+  })();
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4">
       <div className="flex flex-col items-center gap-6 w-full max-w-md relative">
@@ -402,12 +250,63 @@ const Index = () => {
             Спокойно
           </Button>
         </div>
+
+        {/* Mirror mode controls */}
+        <div className="w-full mt-6 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-foreground/90">Зеркальный режим</p>
+              <p className="text-xs text-muted-foreground">{mirrorStatusText}</p>
+            </div>
+            <Button
+              size="sm"
+              variant={isMirrorMode ? "default" : "outline"}
+              onClick={handleMirrorModeToggle}
+              disabled={isLoadingModels && !isMirrorMode}
+            >
+              {isMirrorMode ? 'Остановить' : 'Повторять меня'}
+            </Button>
+          </div>
+
+          <div className="relative overflow-hidden rounded-lg border border-white/10 bg-black/60 aspect-video">
+            <video
+              ref={mirrorVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-cover transition-opacity duration-300"
+              style={{ opacity: showMirrorPreview ? 1 : 0, pointerEvents: showMirrorPreview ? "auto" : "none" }}
+            />
+            {!showMirrorPreview && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+                <span>Предпросмотр скрыт</span>
+              </div>
+            )}
+            {isMirrorMode && detectedEmotion && detectedConfidence >= 0.45 && (
+              <div className="absolute bottom-2 left-2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
+                {getMoodText(detectedEmotion) || detectedEmotion} · {(detectedConfidence * 100).toFixed(0)}%
+              </div>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              className="h-3 w-3"
+              checked={showMirrorPreview}
+              onChange={(event) => setShowMirrorPreview(event.target.checked)}
+            />
+            Показывать мини-просмотр
+          </label>
+        </div>
       </div>
     </div>
   );
 };
 
 export default Index;
+
+
 
 
 
