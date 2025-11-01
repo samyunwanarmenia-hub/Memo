@@ -237,6 +237,7 @@ const EmoPet: React.FC<EmoPetProps> = ({ emotion, isTapped = false, eyeColor = '
   const [headTilt, setHeadTilt] = useState(0);
   const [eyeFilter, setEyeFilter] = useState<string | undefined>(undefined);
   const [angryFrame, setAngryFrame] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const angryFrameCount = 20; // можно скорректировать по количеству файлов
 
 
